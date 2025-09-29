@@ -1,189 +1,108 @@
+-- Steal a Brainrot: Go Behind Map & Get AI Monster (Delta Executor)
+-- 教育的参考用。使用は自己責任。
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
 
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
+-- Noclip (壁貫通) 機能
+local function enableNoclip()
+    local function noclip()
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+    RunService.Stepped:Connect(noclip)
+end
+enableNoclip()
 
-local noclipEnabled = false
-local isAdminAuthenticated = false  -- 管理者認証状態
-local connection
-local CORRECT_PASSWORD = "15240"  -- 管理者パスワード
+-- マップの裏にテレポート（隠しエリアの例座標）
+local function teleportToHiddenArea()
+    -- 仮の座標: マップ外（例: ゲームの端や地下）。要調整
+    local hiddenPosition = Vector3.new(1000, -50, 1000)  -- マップ外の推定座標
+    TweenService:Create(RootPart, TweenInfo.new(0.5), {CFrame = CFrame.new(hiddenPosition)}):Play()
+    print("Teleported to hidden area!")
+end
 
--- RemoteEvent設定
-local TeleportPlayerRemote = Instance.new("RemoteEvent")
-TeleportPlayerRemote.Name = "TeleportPlayerRequest"
-TeleportPlayerRemote.Parent = ReplicatedStorage
-
--- Noclip機能
-local function noclip()
-    for _, part in pairs(character:GetChildren()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = false
+-- AIモンスターゲット（Auto Buy & Steal）
+local function autoGetMonsters()
+    -- Auto Buy Brainrot（例: レアモンスター）
+    local monsters = {"Basic Brainrot", "Rare Spider", "Secret Cow", "Mutated Ikai"}
+    for _, monster in ipairs(monsters) do
+        game:GetService("ReplicatedStorage").Remotes.BuyBrainrot:FireServer(monster)
+        wait(0.5)  -- サーバー負荷軽減
+    end
+    -- Auto Steal from all players
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            game:GetService("ReplicatedStorage").Remotes.StealBrainrot:FireServer(player, "Random")
+            wait(0.5)
         end
     end
 end
 
--- Noclipトグル
-local function toggleNoclip()
-    noclipEnabled = not noclipEnabled
-    if noclipEnabled then
-        print("Noclip ON - 壁貫通有効")
-    else
-        print("Noclip OFF - 壁貫通無効")
-    end
-end
-
--- 島の形変更機能
-local function changeIslandShape()
-    local terrain = Workspace.Terrain
-    if terrain then
-        local center = character.HumanoidRootPart.Position  -- プレイヤー位置を中心
-        local radius = math.random(10, 30)  -- ランダム半径
-        local material = Enum.Material.Grass  -- 地形素材
-        terrain:FillBall(center, radius, material)
-        print("島の形を変更しました！ 半径: " .. radius)
-    else
-        print("Terrainが見つかりません")
-    end
-end
-
--- GUIメニュー作成（Androidタッチ対応）
+-- GUIメニュー（モンスター選択）
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = game.CoreGui
-ScreenGui.Name = "NoclipMenu"
-
 local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 200, 0, 350)  -- フレーム高さを全要素対応で350
-Frame.Position = UDim2.new(0, 10, 0, 10)
-Frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-Frame.BorderSizePixel = 2
-Frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-Frame.Parent = ScreenGui
-
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, 0, 0, 20)
-TitleLabel.Position = UDim2.new(0, 0, 0, 0)
-TitleLabel.Text = "Noclip & Admin Menu"
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextScaled = true
-TitleLabel.Parent = Frame
-
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0, 180, 0, 40)
-ToggleButton.Position = UDim2.new(0.5, -90, 0.1, -20)
-ToggleButton.Text = "Noclip: OFF"
-ToggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.TextScaled = true
-ToggleButton.Parent = Frame
-
-local ChangeIslandButton = Instance.new("TextButton")
-ChangeIslandButton.Size = UDim2.new(0, 180, 0, 40)
-ChangeIslandButton.Position = UDim2.new(0.5, -90, 0.25, -20)
-ChangeIslandButton.Text = "Change Island Shape"
-ChangeIslandButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-ChangeIslandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ChangeIslandButton.TextScaled = true
-ChangeIslandButton.Parent = Frame
-
-local PasswordInput = Instance.new("TextBox")
-PasswordInput.Size = UDim2.new(0, 180, 0, 40)
-PasswordInput.Position = UDim2.new(0.5, -90, 0.4, -20)
-PasswordInput.Text = "パスワードを入力 (15240)"
-PasswordInput.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-PasswordInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-PasswordInput.TextScaled = true
-PasswordInput.ClearTextOnFocus = true
-PasswordInput.Parent = Frame
-
-local PlayerNameInput = Instance.new("TextBox")
-PlayerNameInput.Size = UDim2.new(0, 180, 0, 40)
-PlayerNameInput.Position = UDim2.new(0, -90, 0.55, -20)
-PlayerNameInput.Text = "プレイヤー名を入力"
-PlayerNameInput.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-PlayerNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-PlayerNameInput.TextScaled = true
-PlayerNameInput.ClearTextOnFocus = true
-PlayerNameInput.Parent = Frame
-
+local Title = Instance.new("TextLabel")
+local MonsterList = Instance.new("ScrollingFrame")
 local TeleportButton = Instance.new("TextButton")
-TeleportButton.Size = UDim2.new(0, 180, 0, 40)
-TeleportButton.Position = UDim2.new(0.5, -90, 0.7, -20)
-TeleportButton.Text = "Teleport Player (認証必要)"
-TeleportButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-TeleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-TeleportButton.TextScaled = true
-TeleportButton.Active = false  -- 初期無効
+local GetMonsterButton = Instance.new("TextButton")
+
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Frame.Position = UDim2.new(0.1, 0, 0.1, 0)
+Frame.Size = UDim2.new(0, 300, 0, 400)
+Title.Parent = Frame
+Title.Text = "Brainrot Control Panel"
+Title.Size = UDim2.new(1, 0, 0, 30)
+
+MonsterList.Parent = Frame
+MonsterList.Position = UDim2.new(0, 0, 0, 30)
+MonsterList.Size = UDim2.new(1, 0, 1, -60)
+
+-- モンスター選択ボタン
+local monsters = {"Basic Brainrot", "Rare Spider", "Secret Cow", "Mutated Ikai"}
+for i, monster in ipairs(monsters) do
+    local btn = Instance.new("TextButton")
+    btn.Parent = MonsterList
+    btn.Text = monster
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.Position = UDim2.new(0, 5, 0, (i-1)*35)
+    btn.MouseButton1Click:Connect(function()
+        game:GetService("ReplicatedStorage").Remotes.BuyBrainrot:FireServer(monster)
+        print("Spawned: " .. monster)
+    end)
+end
+
+-- テレポートボタン
 TeleportButton.Parent = Frame
+TeleportButton.Position = UDim2.new(0, 0, 1, -60)
+TeleportButton.Size = UDim2.new(1, 0, 0, 30)
+TeleportButton.Text = "Go Behind Map"
+TeleportButton.MouseButton1Click:Connect(teleportToHiddenArea)
 
-local AuthButton = Instance.new("TextButton")
-AuthButton.Size = UDim2.new(0, 180, 0, 40)
-AuthButton.Position = UDim2.new(0.5, -90, 0.85, -20)
-AuthButton.Text = "認証"
-AuthButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-AuthButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-AuthButton.TextScaled = true
-AuthButton.Parent = Frame
+-- モンスターゲットボタン
+GetMonsterButton.Parent = Frame
+GetMonsterButton.Position = UDim2.new(0, 0, 1, -30)
+GetMonsterButton.Size = UDim2.new(1, 0, 0, 30)
+GetMonsterButton.Text = "Get All Monsters"
+GetMonsterButton.MouseButton1Click:Connect(autoGetMonsters)
 
--- ボタンクリック処理（Noclip）
-ToggleButton.MouseButton1Click:Connect(function()
-    toggleNoclip()
-    ToggleButton.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
-    ToggleButton.BackgroundColor3 = noclipEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(100, 100, 100)
-end)
-
--- 島変更ボタンクリック処理
-ChangeIslandButton.MouseButton1Click:Connect(changeIslandShape)
-
--- パスワード認証処理
-AuthButton.MouseButton1Click:Connect(function()
-    local inputPassword = PasswordInput.Text
-    if inputPassword == CORRECT_PASSWORD then
-        isAdminAuthenticated = true
-        TeleportButton.Active = true
-        TeleportButton.Text = "Teleport Player"
-        TeleportButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        PasswordInput.Text = "認証済み"
-        PasswordInput.Active = false
-        print("管理者認証成功")
-    else
-        isAdminAuthenticated = false
-        TeleportButton.Active = false
-        TeleportButton.Text = "Teleport Player (認証必要)"
-        TeleportButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        PasswordInput.Text = "パスワード不正"
-        print("パスワードが間違っています")
+-- Auto Collect Cash（おまけ）
+local function autoCollect()
+    while true do
+        wait(1)
+        game:GetService("ReplicatedStorage").Remotes.CollectCash:FireServer()
     end
-end)
+end
+spawn(autoCollect)
 
--- テレポートボタンクリック処理
-TeleportButton.MouseButton1Click:Connect(function()
-    if isAdminAuthenticated and character and character.HumanoidRootPart then
-        local targetPlayerName = PlayerNameInput.Text
-        if targetPlayerName and targetPlayerName ~= "" and targetPlayerName ~= "プレイヤー名を入力" then
-            TeleportPlayerRemote:FireServer(targetPlayerName, character.HumanoidRootPart.Position)
-            print("テレポートリクエスト送信: " .. targetPlayerName)
-        else
-            print("有効なプレイヤー名を入力してください")
-        end
-    else
-        print("認証が必要ですまたはキャラクターが見つかりません")
-    end
-end)
-
--- Noclip実行ループ
-connection = RunService.Stepped:Connect(function()
-    if noclipEnabled then
-        noclip()
-    end
-end)
-
--- キャラクター再生成対応
-player.CharacterAdded:Connect(function(newChar)
-    character = newChar
-end)
-
-print("GitHub Noclip & Adminメニュー起動！ パスワード15240で認証後、テレポート可能")
+print("Script Loaded: Ready to go behind map and get AI monsters!")
